@@ -1,0 +1,13 @@
+data_root: /content/INbreast Release 1.0
+mode: sanity
+output_dir: artifacts
+size: 384
+batch_size: 2
+epochs: 25
+workers: 2
+lr: 0.00002
+weight_decay: 0.0001
+dropout: 0.3
+freeze_epochs: 2
+patience: 5
+seed: 42
