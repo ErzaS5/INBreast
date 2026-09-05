@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 from data import image_key, parse_label
 from evaluate import classification_metrics, dice_iou
 from preprocessing import prepare
+from train import score_at_05
 
 
 def test_label_parser():
@@ -34,3 +35,8 @@ def test_metrics_shapes():
     assert metrics["f1"] == 1
     assert np.asarray(metrics["confusion_matrix"]).shape == (2, 2)
     assert dice_iou(np.ones((2, 2)), np.ones((2, 2))) == (1., 1.)
+
+
+def test_train_validation_score_is_bounded():
+    assert score_at_05([0, 1], [.1, .9]) == 1.
+    assert 0. <= score_at_05([0, 1], [.9, .1]) <= 1.

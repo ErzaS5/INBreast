@@ -33,6 +33,11 @@ Vrednosti mogu biti u `config.yaml`: `python train.py --config config.yaml --mod
 
 Primarne metrike koriste klasifikacioni prag `0.5`. Dodatno se prikazuje prag podešen na validaciji. Grad-CAM prag bira se na train maskama, a Dice/IoU računaju na validation maskama.
 
+`history.csv` sadrži `train_score` i `val_score` (F1, u opsegu `[0, 1]`).
+`train_loss` i `val_loss` su BCE loss vrijednosti i namjerno nisu normalizovane, jer
+loss nije vjerovatnoća niti score i može biti veći od 1. Predikcija modela prolazi
+kroz sigmoid funkciju, pa je dobijena vjerovatnoća uvijek u opsegu `[0, 1]`.
+
 ## Ograničenja
 
 - Ovo nije segmentacioni model; lokalizacija je post-hoc Grad-CAM.

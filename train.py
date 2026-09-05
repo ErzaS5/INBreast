@@ -53,6 +53,12 @@ def run_epoch(model, loader, loss_fn, optimizer, scaler, device, training: bool)
     return total / max(1, len(loader.dataset)), labels, probabilities
 
 
+def score_at_05(labels: list[int], probabilities: list[float]) -> float:
+    """F1 classification score, explicitly bounded to the [0, 1] interval."""
+    score = classification_metrics(labels, probabilities, .5)["f1"]
+    return float(np.clip(score, 0., 1.))
+
+
 def save_sanity(pairs: pd.DataFrame, args) -> None:
     sample = pairs.sample(min(4, len(pairs)), random_state=args.seed)
     dataset = PairedINbreastDataset(sample, args.size, False)
@@ -75,7 +81,9 @@ def denormalize(tensor: torch.Tensor) -> np.ndarray:
 def save_history(history: list[dict], output: Path) -> None:
     frame = pd.DataFrame(history); frame.to_csv(output / "history.csv", index=False)
     fig, axes = plt.subplots(1, 2, figsize=(12, 4)); axes[0].plot(frame.epoch, frame.train_loss, label="train"); axes[0].plot(frame.epoch, frame.val_loss, label="validation")
-    axes[0].legend(); axes[0].set_title("Loss"); axes[1].plot(frame.epoch, frame.f1_at_05); axes[1].set_title("Validation F1 @ 0.5")
+    axes[0].legend(); axes[0].set_title("BCE loss (nije ograničen na [0, 1])")
+    axes[1].plot(frame.epoch, frame.train_score, label="train"); axes[1].plot(frame.epoch, frame.val_score, label="validation")
+    axes[1].set_ylim(0, 1); axes[1].legend(); axes[1].set_title("F1 score @ 0.5")
     fig.tight_layout(); fig.savefig(output / "training_curves.png", dpi=150); plt.close(fig)
 
 
@@ -99,11 +107,14 @@ def train_model(pairs: pd.DataFrame, args, device: torch.device) -> None:
         print(f"Nastavak treninga od epohe {first_epoch}: {args.resume}")
     for epoch in range(first_epoch, args.epochs + 1):
         if epoch == args.freeze_epochs + 1: model.freeze_backbone(False)
-        train_loss, _, _ = run_epoch(model, train_loader, loss_fn, optimizer, scaler, device, True)
+        train_loss, train_labels, train_probabilities = run_epoch(model, train_loader, loss_fn, optimizer, scaler, device, True)
         val_loss, labels, probabilities = run_epoch(model, val_loader, loss_fn, optimizer, scaler, device, False)
-        fixed = classification_metrics(labels, probabilities, .5); threshold, tuned_f1 = best_threshold(labels, probabilities); scheduler.step(fixed["f1"])
-        row = {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, "f1_at_05": fixed["f1"], "tuned_f1": tuned_f1, "tuned_threshold": threshold, "lr": optimizer.param_groups[0]["lr"]}
-        history.append(row); print(f"Epoch {epoch:03d}: train={train_loss:.4f} val={val_loss:.4f} F1@.5={fixed['f1']:.4f}")
+        train_score, val_score = score_at_05(train_labels, train_probabilities), score_at_05(labels, probabilities)
+        fixed = classification_metrics(labels, probabilities, .5); threshold, tuned_f1 = best_threshold(labels, probabilities); scheduler.step(val_score)
+        row = {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss,
+               "train_score": train_score, "val_score": val_score, "f1_at_05": val_score,
+               "tuned_f1": tuned_f1, "tuned_threshold": threshold, "lr": optimizer.param_groups[0]["lr"]}
+        history.append(row); print(f"Epoch {epoch:03d}: train_loss={train_loss:.4f} val_loss={val_loss:.4f} train_score={train_score:.4f} val_score={val_score:.4f}")
         if fixed["f1"] > best:
             best, stale = fixed["f1"], 0
             torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(), "epoch": epoch,
