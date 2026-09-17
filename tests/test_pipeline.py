@@ -264,6 +264,23 @@ def test_frozen_resnet_backbone_stays_in_eval_mode_during_head_training():
                    if isinstance(module, nn.modules.batchnorm._BatchNorm))
 
 
+def test_densenet_batchnorm_running_statistics_do_not_change_when_unfrozen():
+    model = create_model(size=64, pretrained=False, backbone="densenet121")
+    model.freeze_backbone(False)
+    batch_norm = next(module for module in model.backbone.modules()
+                      if isinstance(module, nn.modules.batchnorm._BatchNorm))
+    before_mean = batch_norm.running_mean.clone()
+    before_variance = batch_norm.running_var.clone()
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    model.train()
+    loss = model(torch.rand(2, 3, 64, 64), torch.rand(2, 3, 64, 64)).sum()
+    loss.backward()
+    optimizer.step()
+    assert torch.equal(batch_norm.running_mean, before_mean)
+    assert torch.equal(batch_norm.running_var, before_variance)
+    assert batch_norm.weight.grad is not None
+
+
 def test_crossval_orchestrator_writes_complete_oof_results(tmp_path, monkeypatch):
     pairs = pd.DataFrame([
         {"patient_id": f"p{patient}", "pair_id": f"p{patient}_{side}", "side": side,

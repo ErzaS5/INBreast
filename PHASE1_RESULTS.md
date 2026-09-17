@@ -32,3 +32,18 @@ Encoder je zamrznut pet umjesto dvije epohe. Klasifikaciona glava koristi LR `2e
 ResNet nije profitirao od konzervativnijeg protokola. DenseNet jeste: poboljšao je sve glavne tuned-threshold metrike i u ovoj fazi nadmašio ResNet, ali je ostao ispod ranijeg Swin baseline-a. DenseNet rezultat je i dalje nestabilan među foldovima (fold-mean ROC-AUC standardna devijacija `0.1591`, PR-AUC `0.2354`), pa ga ne treba proglasiti konačnim pobjednikom bez ponavljanja preko više seedova.
 
 DenseNet na fiksnom pragu 0.5 predviđa sve primjere kao negativne; dobar ranking se vidi tek uz prag iz nezavisnog unutrašnjeg threshold skupa. To znači da je sljedeći prioritet kalibracija izlaznih vjerovatnoća, a ne dodatno produžavanje zamrznute faze.
+
+## Phase 1C — DenseNet kalibracija i tri seeda
+
+ResNet-18 je nakon Phase 1B isključen iz daljih eksperimenata. DenseNet-121 je ponovljen sa seedovima 42, 43 i 44. Svaki outer fold sada ima dodatni, patient-disjoint calibration holdout i koristi temperature scaling; BatchNorm running statistike ostaju zamrznute tokom cijelog fine-tuninga.
+
+| Seed | ROC-AUC | PR-AUC | Brier | ECE | Senzitivnost | Specifičnost | Balanced accuracy | F1 | MCC |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 42 | 0.6278 | 0.3431 | 0.1828 | 0.0367 | 0.9000 | 0.3289 | 0.6145 | 0.4569 | 0.2220 |
+| 43 | 0.5139 | 0.2498 | 0.2059 | 0.0832 | 0.8200 | 0.2303 | 0.5251 | 0.3942 | 0.0526 |
+| 44 | 0.5495 | 0.3012 | 0.1858 | 0.0233 | 0.8600 | 0.2697 | 0.5649 | 0.4216 | 0.1315 |
+| **Sredina ± sample SD** | **0.5637 ± 0.0582** | **0.2981 ± 0.0468** | **0.1915 ± 0.0126** | **0.0477 ± 0.0314** | **0.8600 ± 0.0400** | **0.2763 ± 0.0497** | **0.5682 ± 0.0448** | **0.4242 ± 0.0314** | **0.1354 ± 0.0848** |
+
+Temperature scaling je prihvaćen u 14 od 15 foldova. Temperature su uglavnom bile između 1.3 i 4.3, ali je jedan fold dostigao gornju granicu `54.598`; to je upozorenje da je calibration holdout od približno devet pacijenata premalen za stabilnu procjenu temperature. Kalibracija je znatno smanjila Brier score i ECE, ali prag 0.5 i dalje gotovo uvijek daje samo negativnu klasu. Zato se operativni prag mora birati na nezavisnom threshold holdoutu, kako je već implementirano.
+
+Konačan zaključak Phase 1C je da DenseNet ima signal iznad slučajnog rangiranja, ali rezultat zavisi od seeda i još je ispod Swin baseline-a. Dalje podešavanje na ovom istom skupu povećalo bi rizik od overfittinga na evaluacioni protokol; naredni korak treba da bude ili više podataka/eksterna validacija, ili unaprijed definisana ograničena promjena loss-a bez biranja na osnovu outer-test rezultata.
