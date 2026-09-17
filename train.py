@@ -24,7 +24,7 @@ from environment import environment_info
 from evaluate import (METRIC_NAMES, apply_calibration, classification_metrics, classification_metrics_from_predictions,
                       dice_iou, fit_temperature, localization_summary, patient_cluster_bootstrap, select_threshold)
 from gradcam import paired_gradcam, save_prediction_artifacts
-from model import ARCHITECTURE_NAME, ARCHITECTURE_VERSION, NORMALIZATION, create_model
+from model import ARCHITECTURE_NAME, ARCHITECTURE_VERSION, NORMALIZATION, SUPPORTED_BACKBONES, create_model
 from preprocessing import (PREPROCESSING_VERSION, geometry_valid_region, heatmap_to_original, load_xml_mask, read_dicom)
 from reporting import prediction_artifacts, write_json
 
@@ -72,7 +72,9 @@ def run_epoch(model, loader, loss_fn, optimizer, scaler, device, training):
                 raise ValueError('Training loss sadrži NaN/Inf.')
         if training:
             scaler.scale(loss).backward();scaler.unscale_(optimizer)
-            nn.utils.clip_grad_norm_(model.parameters(),1.,error_if_nonfinite=True)
+            # CUDA AMP may legitimately overflow early; GradScaler must be allowed
+            # to skip that optimizer step and reduce its scale.
+            nn.utils.clip_grad_norm_(model.parameters(),1.,error_if_nonfinite=not scaler.is_enabled())
             scaler.step(optimizer);scaler.update()
         total+=loss.item()*len(targets)
         labels.extend(targets.cpu().int().tolist())
@@ -140,8 +142,8 @@ def validate_checkpoint_versions(checkpoint):
     if checkpoint.get('normalization')!=NORMALIZATION or checkpoint.get('label_definition')!=LABEL_DEFINITION or checkpoint.get('num_outputs')!=1:
         raise ValueError('Checkpoint normalization/label definition/num_outputs nisu kompatibilni.')
     if not isinstance(checkpoint.get('size'),int) or checkpoint['size']<32 or checkpoint['size']%32:
-        raise ValueError('Checkpoint input size nije kompatibilan sa Swin backbone-om.')
-    if not 0<=checkpoint.get('dropout',-1)<1 or not str(checkpoint.get('backbone','')).startswith('swin_'):
+        raise ValueError('Checkpoint input size nije kompatibilan sa modelom.')
+    if not 0<=checkpoint.get('dropout',-1)<1 or checkpoint.get('backbone') not in SUPPORTED_BACKBONES:
         raise ValueError('Checkpoint backbone/dropout nisu validni.')
     if not np.isfinite(checkpoint.get('threshold',np.nan)) or not 0<=checkpoint['threshold']<=1:
         raise ValueError('Checkpoint threshold nije validan.')
@@ -408,7 +410,7 @@ def collect_localization(model,frame,args,device,save=False,heatmap_threshold=.5
                     'predicted_label':int(probability>=classification_threshold),'category':category,
                     'classification_threshold':classification_threshold,'has_roi':has_roi,
                     'cam':original_cam,'mask':roi,'valid_region':original_valid,'geometry':geometry,
-                    'target_class':1,'target_layer':'backbone.layers[-1].blocks[-1].norm1',
+                    'target_class':1,'target_layer':model.gradcam_target_name,
                     'evaluation_space':'original DICOM resolution; square padding excluded'}
             record['padding_heat_fraction']=padding_heat_fraction
             if has_roi and roi.any():

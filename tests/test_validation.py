@@ -354,6 +354,16 @@ def test_cli_yaml_precedence_and_types(tmp_path):
     assert args.output_dir==Path('custom')
 
 
+@pytest.mark.parametrize('backbone',['swin_tiny_patch4_window7_224','resnet18','densenet121'])
+def test_supported_backbones_parse(backbone):
+    assert parse_args(['--backbone',backbone]).backbone == backbone
+
+
+def test_unknown_backbone_rejected():
+    with pytest.raises(ValueError,match='backbone'):
+        parse_args(['--backbone','unknown_network'])
+
+
 def test_unknown_nested_yaml_key(tmp_path):
     path=tmp_path/'config.yaml';path.write_text('threshold:\n  typo: 1\n')
     with pytest.raises(ValueError,match='Nepoznati'):
@@ -440,7 +450,7 @@ def test_resume_restores_states_history_and_larger_epoch_checkpoint(synthetic_ro
 def test_real_end_to_end_all_holdout_cli_modes_and_checkpoint(synthetic_root,tmp_path):
     common=['--size','64','--batch-size','4','--no-pretrained','--no-augmentations','--freeze-epochs','0',
             '--checkpoint-every','0','--bootstrap-iterations','10','--threshold-strategy','fixed',
-            '--gradcam-enabled','--gradcam-examples','1','--output-dir',str(tmp_path/'e2e')]
+            '--gradcam-enabled','--gradcam-examples','1','--device','cpu','--output-dir',str(tmp_path/'e2e')]
     train.main(common+['--mode','prepare','--data-root',str(synthetic_root)])
     pairs=load_metadata_pairs(tmp_path/'e2e'/'metadata_pairs.csv',check_files=True)
     train.main(common+['--mode','sanity'])

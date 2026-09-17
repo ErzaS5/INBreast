@@ -1,6 +1,6 @@
 # INbreast: breast-level CC/MLO klasifikacija
 
-Jedan primer je **jedna dojka**, predstavljena tačno jednim CC i jednim MLO mamogramom. Shared Swin-Tiny encoder obrađuje dva prikaza i vraća jednu verovatnoću, binarnu predikciju i klasifikacioni prag. Leva i desna dojka su odvojeni primeri; dovoljan je jedan kompletan par. Četiri projekcije pacijenta nisu jedan model input. Nema patient-level fusion niti patient-level predikcije.
+Jedan primer je **jedna dojka**, predstavljena tačno jednim CC i jednim MLO mamogramom. Shared encoder obrađuje dva prikaza i vraća jednu verovatnoću, binarnu predikciju i klasifikacioni prag. Podržani backbone-i su Swin-Tiny, ResNet-18 i DenseNet-121. Leva i desna dojka su odvojeni primeri; dovoljan je jedan kompletan par. Četiri projekcije pacijenta nisu jedan model input. Nema patient-level fusion niti patient-level predikcije.
 
 Pacijent služi isključivo za grupisanje svih strana i svih datuma radi sprečavanja leakage-a, stratifikacije i bootstrap statistike. Identitet para je `patient token + acquisition date + side`; konkretni identifikatori nisu dio javne dokumentacije.
 
@@ -68,9 +68,11 @@ Ova kopija sadrži nekompresovane DICOM slike i ne zahteva dodatne decodere. Za 
 
 ## Konfiguracija
 
-Precedence je **CLI argument > YAML konfiguracija > podrazumevana vrednost**. YAML se ne učitava automatski: koristite `--config config.yaml`. Nepoznati ključevi, nevalidni opsezi, nekompatibilna Swin veličina i negrupisani split prekidaju rad pre treninga. Isti parametar ne sme biti istovremeno zadat kao flat YAML ključ i nested ključ. Koristite `python train.py --help` za sve opcije.
+Precedence je **CLI argument > YAML konfiguracija > podrazumevana vrednost**. YAML se ne učitava automatski: koristite `--config config.yaml`. Nepoznati ključevi, nevalidni opsezi, nepodržan backbone i negrupisani split prekidaju rad pre treninga. Isti parametar ne sme biti istovremeno zadat kao flat YAML ključ i nested ključ. Koristite `python train.py --help` za sve opcije.
 
-`metadata_schema_version=2`, `preprocessing_version=2`, arhitektura `shared_swin_cc_mlo_late_fusion`, verzija 1. Crop je određen intenzitetom, nezavisno od ROI-ja. Float BOX resize čuva veoma sitne ROI-je bez 8-bitnog zaokruživanja. Nije uveden novi VOI/windowing postupak. ImageNet mean/std ostaje isti.
+`metadata_schema_version=2`, `preprocessing_version=2`, arhitektura `shared_encoder_cc_mlo_late_fusion`, verzija 2. Crop je određen intenzitetom, nezavisno od ROI-ja. Float BOX resize čuva veoma sitne ROI-je bez 8-bitnog zaokruživanja. Nije uveden novi VOI/windowing postupak. ImageNet mean/std ostaje isti.
+
+Za Phase 1 poređenje koriste se `experiment_resnet18.yaml` i `experiment_densenet121.yaml`. Oba koriste iste foldove, seed, preprocessing i trening protokol kao početni Swin eksperiment; razlikuje se samo backbone i output direktorijum.
 
 ## Priprema i sanity
 
@@ -157,7 +159,7 @@ Metrike su breast-level: sensitivity/recall, specificity, precision/PPV, NPV, ac
 python train.py --config config.yaml --mode evaluate --output-dir artifacts/final_holdout --gradcam-enabled --gradcam-examples 8 --gradcam-categories FN FP --heatmap-threshold 0.5
 ```
 
-Grad-CAM je opciona post-hoc **heatmapa**; thresholded Grad-CAM region nije izlaz segmentacionog modela. Target layer je poslednji Swin block `norm1`, layout NHWC, pozitivna klasa (1), sa tačno dva hook poziva. Konstantna mapa daje nule; nevalidne aktivacije/gradijenti se odbijaju.
+Grad-CAM je opciona post-hoc **heatmapa**; thresholded Grad-CAM region nije izlaz segmentacionog modela. Target layer i layout biraju se prema backbone-u (Swin NHWC, CNN NCHW), za pozitivnu klasu (1), sa tačno dva hook poziva. Konstantna mapa daje nule; nevalidne aktivacije/gradijenti se odbijaju.
 
 Geometrija čuva originalnu rezoluciju, crop, resize i padding. Heatmapa se vraća sa modelskog kvadrata preko sadržaja bez paddinga na originalnu DICOM sliku. Lokalizacija koristi originalni XML ROI i računa Dice/IoU samo za prikaze sa validnim nepraznim ROI-jem, nezavisno od klasifikacione labele. Prag heatmape je unapred konfigurisan, ne fituje se na train/test slikama. Broj primera je ograničen; svi neobrađeni prikazi i razlozi su u coverage izveštaju. Rezultati ograničenog podskupa nisu procena lokalizacije celog dataseta.
 

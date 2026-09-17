@@ -3,6 +3,7 @@ import sys
 from types import SimpleNamespace
 import numpy as np
 import pandas as pd
+import pytest
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -233,6 +234,18 @@ def test_real_swin_forward_and_gradcam():
     assert logits.shape == (1,) and torch.isfinite(logits).all()
     cc_cam, mlo_cam = paired_gradcam(model, cc, mlo)
     assert cc_cam.shape == mlo_cam.shape == (224, 224)
+    assert np.isfinite(cc_cam).all() and np.isfinite(mlo_cam).all()
+
+
+@pytest.mark.parametrize("backbone", ["resnet18", "densenet121"])
+def test_real_cnn_forward_and_gradcam(backbone):
+    model = create_model(size=64, pretrained=False, backbone=backbone).eval()
+    cc, mlo = torch.rand(1, 3, 64, 64), torch.rand(1, 3, 64, 64)
+    with torch.no_grad():
+        logits = model(cc, mlo)
+    assert logits.shape == (1,) and torch.isfinite(logits).all()
+    cc_cam, mlo_cam = paired_gradcam(model, cc, mlo)
+    assert cc_cam.shape == mlo_cam.shape == (64, 64)
     assert np.isfinite(cc_cam).all() and np.isfinite(mlo_cam).all()
 
 

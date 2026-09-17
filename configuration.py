@@ -7,6 +7,8 @@ from pathlib import Path
 
 import yaml
 
+from model import SUPPORTED_BACKBONES
+
 
 DEFAULTS = {
     "data_root": None, "metadata_path": None, "metadata_pairs": None,
@@ -108,10 +110,10 @@ def validate_config(args) -> None:
             raise ValueError(f"{name} mora biti boolean.")
     if not args.grouped_split:
         raise ValueError("grouped_split=false nije dozvoljen: svi pregledi/dojke iste osobe moraju ostati zajedno.")
-    if not isinstance(args.backbone, str) or not args.backbone.startswith("swin_"):
-        raise ValueError("Baseline podržava timm Swin backbone (swin_*).")
+    if args.backbone not in SUPPORTED_BACKBONES:
+        raise ValueError(f"Nepodržan backbone; dozvoljeni su {SUPPORTED_BACKBONES}.")
     if args.size % 32:
-        raise ValueError("size mora biti deljiv sa 32 za Swin backbone.")
+        raise ValueError("size mora biti deljiv sa 32 radi uporedivog preprocessinga.")
     if not isinstance(args.gradcam_categories, list) or not set(args.gradcam_categories) <= {"FN", "FP", "TP", "TN"}:
         raise ValueError("gradcam_categories mora biti lista FN/FP/TP/TN.")
 

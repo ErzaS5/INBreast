@@ -35,7 +35,7 @@ def paired_gradcam(model, cc_image, mlo_image, target_class=1):
         raise ValueError('Grad-CAM zahteva konačne 4D CC/MLO ulaze sa batch_size=1.')
     if target_class not in (0,1):
         raise ValueError('Grad-CAM target_class mora biti 0 ili 1 za binarni model.')
-    # Shared Swin has an explicit NHWC contract; other backbones must declare gradcam_layout.
+    # Transformer and CNN backbones declare their activation layout explicitly.
     layout = getattr(model,'gradcam_layout','NHWC')
     activations = []
     def capture(_module,_inputs,output):
