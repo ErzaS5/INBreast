@@ -1,0 +1,27 @@
+item,value
+patients,107
+patients_in_labeled_images,108
+exams_in_labeled_images,117
+exams,116
+complete_pairs,202
+left_pairs,104
+right_pairs,98
+positive_pairs,50
+negative_pairs,152
+pairs_with_roi,169
+annotated_cc_views,169
+annotated_mlo_views,168
+incomplete_pairs,3
+excluded_images,6
+patients_with_multiple_exams,9
+patients_with_both_breasts,80
+patients_with_one_breast,27
+label_conflicts,0
+birads_conflicts,2
+metadata_schema_version,2
+preprocessing_version,2
+label_definition,"BI-RADS 1-3=0, 4-6=1; radiological proxy, not histology-confirmed malignancy"
+data_root,<local dataset path>
+metadata_table,<local dataset path>/INbreast.xls
+dicom_found,410
+repeated_exposure_candidates,4

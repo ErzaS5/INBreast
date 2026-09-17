@@ -1,15 +1,53 @@
+# Local Python environments and caches
+.venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.ipynb_checkpoints/
-.venv/
-venv/
-artifacts/
-*.pt
-*.pth
+.mypy_cache/
+.ruff_cache/
+
+# Editors and operating systems
+.DS_Store
+__MACOSX/
+.idea/
+.vscode/
+Thumbs.db
+
+# Private/local configuration
+.env
+config.local.yaml
+config.windows.yaml
+config.macos.yaml
+
+# Dataset and medical images (never commit patient/source data)
+data/
+INbreast Release 1.0/
 *.dcm
 *.dicom
+*.xml
 *.xls
 *.xlsx
-__MACOSX/
-.DS_Store
+
+# Generated training data and outputs
+artifacts/
+checkpoints/
+runs/
+outputs/
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.npy
+*.safetensors
+
+# Generated archives and logs
+*.zip
+*.tar
+*.tar.gz
+*.log
+
+# Keep the small, curated result summaries under results/
+!results/
+!results/**

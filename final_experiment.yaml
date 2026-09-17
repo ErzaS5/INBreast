@@ -1,42 +1,45 @@
-# CLI argument > YAML configuration > built-in default.
 data_root: data/INbreast Release 1.0
 metadata_pairs: artifacts/metadata_pairs.csv
-mode: sanity
-output_dir: artifacts
+mode: crossval
+output_dir: artifacts/final_baseline
 seed: 42
 grouped_split: true
 folds: 5
 inner_val_fraction: 0.15
 threshold_fraction: 0.15
-calibration_fraction: 0.10
-test_fraction: 0.20
+calibration_fraction: 0.1
+test_fraction: 0.2
 backbone: swin_tiny_patch4_window7_224
 size: 384
 dropout: 0.3
 batch_size: 2
 epochs: 25
 workers: 0
-lr: 0.00002
+lr: 2.0e-05
 weight_decay: 0.0001
 augmentations: true
 freeze_epochs: 2
 checkpoint_metric: pr_auc
 patience: 5
 scheduler: plateau
-checkpoint_every: 0 # Retention: best.pt and last.pt; enable positive interval for periodic snapshots.
+checkpoint_every: 0
 threshold:
   strategy: min_sensitivity
   fixed_value: 0.5
-  minimum_sensitivity: 0.90
+  minimum_sensitivity: 0.9
 calibration:
-  method: none # Optional temperature; creates a separate calibration patient holdout.
+  method: none
   bins: 10
 gradcam:
-  enabled: false
-  examples: 8
-  categories: [FN, FP, TP, TN]
+  enabled: true
+  examples: 4
+  categories:
+  - FN
+  - FP
+  - TP
+  - TN
   threshold: 0.5
 bootstrap_iterations: 2000
 eval_split: test
-device: auto
+device: mps
 cache_dir: artifacts/preprocessed

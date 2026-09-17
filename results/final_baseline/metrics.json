@@ -1,0 +1,256 @@
+{
+  "folds": 5,
+  "patients": 107,
+  "pairs": 202,
+  "unit": "one breast CC/MLO pair",
+  "classification_at_05": {
+    "threshold": 0.5,
+    "sensitivity": 0.38,
+    "specificity": 0.881578947368421,
+    "precision": 0.5135135135135135,
+    "npv": 0.8121212121212121,
+    "accuracy": 0.7574257425742574,
+    "balanced_accuracy": 0.6307894736842106,
+    "f1": 0.4367816091954023,
+    "mcc": 0.29185473913941523,
+    "roc_auc": 0.7423684210526315,
+    "pr_auc": 0.523125159608612,
+    "brier_score": 0.21353346355822014,
+    "ece": 0.19733409188277862,
+    "confusion_matrix": [
+      [
+        134,
+        18
+      ],
+      [
+        31,
+        19
+      ]
+    ],
+    "pairs": 202,
+    "warnings": [],
+    "recall": 0.38,
+    "ppv": 0.5135135135135135
+  },
+  "classification_inner_tuned_per_fold": {
+    "sensitivity": 0.94,
+    "specificity": 0.3881578947368421,
+    "precision": 0.3357142857142857,
+    "npv": 0.9516129032258065,
+    "accuracy": 0.5247524752475248,
+    "balanced_accuracy": 0.664078947368421,
+    "f1": 0.49473684210526314,
+    "mcc": 0.30706462743734503,
+    "roc_auc": 0.7423684210526315,
+    "pr_auc": 0.523125159608612,
+    "brier_score": 0.21353346355822014,
+    "ece": 0.19733409188277862,
+    "confusion_matrix": [
+      [
+        59,
+        93
+      ],
+      [
+        3,
+        47
+      ]
+    ],
+    "pairs": 202,
+    "warnings": [],
+    "recall": 0.94,
+    "ppv": 0.3357142857142857
+  },
+  "bootstrap": {
+    "confidence": 0.95,
+    "iterations": 2000,
+    "seed": 42,
+    "patients": 107,
+    "method": "patient cluster percentile bootstrap; all breasts/dates repeated together; fold thresholds fixed",
+    "intervals": {
+      "sensitivity": {
+        "lower": 0.8683771929824562,
+        "upper": 1.0,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "specificity": {
+        "lower": 0.3006535947712418,
+        "upper": 0.4787900128040973,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "precision": {
+        "lower": 0.26173980382034073,
+        "upper": 0.4117647058823529,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "npv": {
+        "lower": 0.8955027494108405,
+        "upper": 1.0,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "accuracy": {
+        "lower": 0.4494770879526977,
+        "upper": 0.6010601139380816,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "balanced_accuracy": {
+        "lower": 0.6099980197376964,
+        "upper": 0.7188809338678569,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "f1": {
+        "lower": 0.4071708231887873,
+        "upper": 0.5756134515890613,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "mcc": {
+        "lower": 0.2082280917669076,
+        "upper": 0.40444476232302856,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "roc_auc": {
+        "lower": 0.6597732367534999,
+        "upper": 0.8176581116523042,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "pr_auc": {
+        "lower": 0.4094207233998429,
+        "upper": 0.6544489390562047,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "brier_score": {
+        "lower": 0.16912626598105704,
+        "upper": 0.2606662180376977,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      },
+      "ece": {
+        "lower": 0.15610135631265035,
+        "upper": 0.2557993290449457,
+        "valid_iterations": 2000,
+        "undefined_iterations": 0
+      }
+    },
+    "warnings": [
+      "Intervals condition on fitted models/splits/thresholds; training uncertainty is not resampled."
+    ]
+  },
+  "fold_mean_std": {
+    "sensitivity": {
+      "mean": 0.9377777777777776,
+      "std": 0.056981695133147055,
+      "defined_folds": 5
+    },
+    "specificity": {
+      "mean": 0.375323669450477,
+      "std": 0.2093017003429667,
+      "defined_folds": 5
+    },
+    "precision": {
+      "mean": 0.3473215123369922,
+      "std": 0.07942404965582311,
+      "defined_folds": 5
+    },
+    "npv": {
+      "mean": 0.9450854700854702,
+      "std": 0.059941515192946784,
+      "defined_folds": 5
+    },
+    "accuracy": {
+      "mean": 0.5180487804878048,
+      "std": 0.15005221615718026,
+      "defined_folds": 5
+    },
+    "balanced_accuracy": {
+      "mean": 0.6565507236141274,
+      "std": 0.10243569155389332,
+      "defined_folds": 5
+    },
+    "f1": {
+      "mean": 0.5026336360418157,
+      "std": 0.08063796787880459,
+      "defined_folds": 5
+    },
+    "mcc": {
+      "mean": 0.29958221665621454,
+      "std": 0.15725225827924133,
+      "defined_folds": 5
+    },
+    "roc_auc": {
+      "mean": 0.7823127350866814,
+      "std": 0.14982388063054278,
+      "defined_folds": 5
+    },
+    "pr_auc": {
+      "mean": 0.6732823555312261,
+      "std": 0.2264616736413047,
+      "defined_folds": 5
+    },
+    "brier_score": {
+      "mean": 0.21443302708587994,
+      "std": 0.10331699157859446,
+      "defined_folds": 5
+    },
+    "ece": {
+      "mean": 0.20647570651910058,
+      "std": 0.10901615039466377,
+      "defined_folds": 5
+    },
+    "f1_at_05": {
+      "mean": 0.35072039072039074,
+      "std": 0.34184128505319467,
+      "defined_folds": 5
+    },
+    "f1_inner_tuned": {
+      "mean": 0.5026336360418157,
+      "std": 0.08063796787880459,
+      "defined_folds": 5
+    },
+    "dice_mean": {
+      "mean": 0.023973681483843216,
+      "std": 0.052419311690320054,
+      "defined_folds": 5
+    },
+    "iou_mean": {
+      "mean": 0.013488497542418898,
+      "std": 0.02956243427775464,
+      "defined_folds": 5
+    }
+  },
+  "localization": {
+    "annotated_views": 36,
+    "cc": {
+      "count": 18,
+      "dice_mean": 0.030190768316853436,
+      "dice_median": 5.992258363916658e-06,
+      "iou_mean": 0.017291523632934756,
+      "iou_median": 2.9961381696018015e-06
+    },
+    "mlo": {
+      "count": 18,
+      "dice_mean": 0.023082695820826355,
+      "dice_median": 0.0,
+      "iou_mean": 0.012682223526210186,
+      "iou_median": 0.0
+    },
+    "all": {
+      "count": 36,
+      "dice_mean": 0.026636732068839892,
+      "dice_median": 0.0,
+      "iou_mean": 0.01498687357957247,
+      "iou_median": 0.0
+    }
+  },
+  "patient_leakage": false,
+  "method": "Outer stratified patient-grouped CV; disjoint train/checkpoint/threshold/optional calibration holdouts within each development fold; no hyperparameter search",
+  "localization_policy": "Fixed Grad-CAM threshold; only nonempty XML ROI views; original DICOM space; padding excluded; configured subset only"
+}
