@@ -249,6 +249,21 @@ def test_real_cnn_forward_and_gradcam(backbone):
     assert np.isfinite(cc_cam).all() and np.isfinite(mlo_cam).all()
 
 
+def test_frozen_resnet_backbone_stays_in_eval_mode_during_head_training():
+    model = create_model(size=64, pretrained=False, backbone="resnet18")
+    model.freeze_backbone(True)
+    model.train()
+    assert not model.backbone.training
+    assert model.classifier.training
+    assert not any(parameter.requires_grad for parameter in model.backbone.parameters())
+    model.freeze_backbone(False)
+    model.train()
+    assert model.backbone.training
+    assert all(parameter.requires_grad for parameter in model.backbone.parameters())
+    assert not any(module.training for module in model.backbone.modules()
+                   if isinstance(module, nn.modules.batchnorm._BatchNorm))
+
+
 def test_crossval_orchestrator_writes_complete_oof_results(tmp_path, monkeypatch):
     pairs = pd.DataFrame([
         {"patient_id": f"p{patient}", "pair_id": f"p{patient}_{side}", "side": side,

@@ -185,6 +185,19 @@ def _checkpoint_state(model,optimizer,scheduler,scaler,train_loader,val_loader,e
                      'mps':torch.mps.get_rng_state() if next(model.parameters()).device.type == 'mps' else None}}
 
 
+def make_optimizer(model,args):
+    """Use a conservative encoder LR and a separate classifier-head LR."""
+    backbone=list(model.backbone.parameters()) if hasattr(model,'backbone') else []
+    backbone_ids={id(parameter) for parameter in backbone}
+    head=[parameter for parameter in model.parameters() if id(parameter) not in backbone_ids]
+    groups=[]
+    if backbone:
+        groups.append({'params':backbone,'lr':args.encoder_lr,'name':'encoder'})
+    if head:
+        groups.append({'params':head,'lr':args.head_lr,'name':'head'})
+    return torch.optim.AdamW(groups,weight_decay=args.weight_decay)
+
+
 def finalize_checkpoint(path,pairs,args,device,model):
     checkpoint=trusted_checkpoint_load(path)
     model.load_state_dict(checkpoint['model']);model.eval()
@@ -223,7 +236,7 @@ def train_model(pairs,args,device):
     model.freeze_backbone(args.freeze_epochs>0)
     positives,negatives=int(train_frame.label.sum()),int((train_frame.label==0).sum())
     loss_fn=nn.BCEWithLogitsLoss(pos_weight=torch.tensor(negatives/positives,device=device))
-    optimizer=torch.optim.AdamW(model.parameters(),lr=args.lr,weight_decay=args.weight_decay)
+    optimizer=make_optimizer(model,args)
     mode='min' if args.checkpoint_metric=='val_loss' else 'max'
     scheduler=None
     if args.scheduler=='plateau':
@@ -244,7 +257,7 @@ def train_model(pairs,args,device):
             if not previous_history.empty and previous_history.epoch.max() > saved['epoch']:
                 raise ValueError('Resume checkpoint je stariji od postojeće istorije; koristite last.pt ili zaseban output directory.')
         for name in ('size','dropout','backbone','checkpoint_metric','scheduler','freeze_epochs','batch_size','workers','seed',
-                     'lr','weight_decay','augmentations','patience','threshold_strategy','fixed_threshold','minimum_sensitivity','calibration_method'):
+                     'lr','encoder_lr','head_lr','weight_decay','augmentations','patience','threshold_strategy','fixed_threshold','minimum_sensitivity','calibration_method'):
             if saved['config'].get(name)!=getattr(args,name):
                 raise ValueError(f'Resume konfiguracija nije kompatibilna: {name}.')
         model.load_state_dict(saved['model']);optimizer.load_state_dict(saved['optimizer'])
@@ -294,13 +307,20 @@ def train_model(pairs,args,device):
         if history:
             save_history(history,args.output_dir)
         return
-    if stale>=args.patience:
+    if stale>=args.patience and first_epoch>args.freeze_epochs+1:
         print('Resume checkpoint je već završio early stopping; istorija je očuvana.')
         save_history(history,args.output_dir)
         return
     for epoch in range(first_epoch,args.epochs+1):
         if epoch==args.freeze_epochs+1:
             model.freeze_backbone(False)
+            # Give the newly unfrozen encoder a full early-stopping window.
+            stale=0
+            if args.scheduler=='plateau':
+                for group in optimizer.param_groups:
+                    group['lr']=args.encoder_lr if group.get('name')=='encoder' else args.head_lr
+                scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer,mode=mode,factor=.5,patience=2)
         train_loss,_,_=run_epoch(model,train_loader,loss_fn,optimizer,scaler,device,True)
         val_loss,labels,probabilities=run_epoch(model,val_loader,loss_fn,optimizer,scaler,device,False)
         fixed=classification_metrics(labels,probabilities,.5,args.calibration_bins)
@@ -311,7 +331,10 @@ def train_model(pairs,args,device):
             scheduler.step(score) if args.scheduler=='plateau' else scheduler.step()
         row={'epoch':epoch,'train_loss':train_loss,'val_loss':val_loss,'f1_at_05':fixed['f1'],
              'sensitivity':fixed['sensitivity'],'roc_auc':fixed['roc_auc'],'pr_auc':fixed['pr_auc'],
-             'checkpoint_metric':args.checkpoint_metric,'checkpoint_score':score,'lr':optimizer.param_groups[0]['lr']}
+             'checkpoint_metric':args.checkpoint_metric,'checkpoint_score':score,
+             'lr':optimizer.param_groups[0]['lr'],
+             'encoder_lr':next((group['lr'] for group in optimizer.param_groups if group.get('name')=='encoder'),None),
+             'head_lr':next((group['lr'] for group in optimizer.param_groups if group.get('name')=='head'),None)}
         history.append(row)
         improved=score<best if mode=='min' else score>best
         best,stale=(score,0) if improved else (best,stale+1)
@@ -324,7 +347,8 @@ def train_model(pairs,args,device):
             torch.save(state,args.output_dir/f'epoch_{epoch:03d}.pt')
         save_history(history,args.output_dir)
         print(f'Epoha {epoch:03d}/{args.epochs:03d} | train loss={train_loss:.4f} | val loss={val_loss:.4f} | '
-              f'{args.checkpoint_metric}={score:.4f} | F1@0.5={fixed["f1"]:.4f} | LR={optimizer.param_groups[0]["lr"]:.2e}',flush=True)
+              f'{args.checkpoint_metric}={score:.4f} | F1@0.5={fixed["f1"]:.4f} | '
+              f'encoder LR={row["encoder_lr"] or 0:.2e} | head LR={row["head_lr"] or 0:.2e}',flush=True)
         if stale>=args.patience:
             print('Early stopping.');break
     best_checkpoint=finalize_checkpoint(args.output_dir/'best.pt',pairs,args,device,model)

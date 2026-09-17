@@ -15,7 +15,8 @@ DEFAULTS = {
     "mode": "sanity", "output_dir": "artifacts", "checkpoint": None, "resume": None,
     "rebuild_metadata": False, "pair_id": None, "cc_path": None, "mlo_path": None,
     "cc_xml": None, "mlo_xml": None, "size": 384, "batch_size": 2, "epochs": 25,
-    "workers": 0, "lr": 2e-5, "weight_decay": 1e-4, "dropout": .3,
+    "workers": 0, "lr": 2e-5, "encoder_lr": None, "head_lr": None,
+    "weight_decay": 1e-4, "dropout": .3,
     "freeze_epochs": 2, "patience": 5, "seed": 42, "no_pretrained": False,
     "backbone": "swin_tiny_patch4_window7_224", "folds": 5,
     "inner_val_fraction": .15, "threshold_fraction": .15, "calibration_fraction": .10,
@@ -86,14 +87,14 @@ def validate_config(args) -> None:
     if isinstance(args.folds, bool) or not isinstance(args.folds, int) or args.folds < 2:
         raise ValueError("folds mora biti ceo broj >= 2.")
     for name in ("dropout", "fixed_threshold", "minimum_sensitivity", "heatmap_threshold",
-                 "lr", "weight_decay", "inner_val_fraction", "threshold_fraction", "calibration_fraction", "test_fraction"):
+                 "lr", "encoder_lr", "head_lr", "weight_decay", "inner_val_fraction", "threshold_fraction", "calibration_fraction", "test_fraction"):
         value = getattr(args, name)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             raise ValueError(f"{name} mora biti konačan broj.")
     if not 0 <= args.dropout < 1:
         raise ValueError("dropout mora biti u [0, 1).")
-    if args.lr <= 0 or args.weight_decay < 0:
-        raise ValueError("lr mora biti > 0; weight_decay mora biti >= 0.")
+    if args.lr <= 0 or args.encoder_lr <= 0 or args.head_lr <= 0 or args.weight_decay < 0:
+        raise ValueError("lr, encoder_lr i head_lr moraju biti > 0; weight_decay mora biti >= 0.")
     for name in ("fixed_threshold", "minimum_sensitivity", "heatmap_threshold"):
         if not 0 <= getattr(args, name) <= 1:
             raise ValueError(f"{name} mora biti u [0, 1].")
@@ -140,6 +141,10 @@ def parse_args(argv=None):
         parser.add_argument(flag, **options)
     cli = vars(parser.parse_args(argv))
     values = {**DEFAULTS, **configured, **cli}
+    # `lr` remains a backwards-compatible common learning rate. Explicit
+    # encoder/head values allow discriminative fine-tuning.
+    for name in ("encoder_lr", "head_lr"):
+        values[name] = float(values["lr"] if values[name] is None else values[name])
     for name in PATHS:
         if values[name] is not None:
             values[name] = Path(values[name]).expanduser()

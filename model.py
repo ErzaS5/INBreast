@@ -28,6 +28,7 @@ class DualViewModel(nn.Module):
             raise ValueError(f"Nepodržan backbone {backbone!r}; dozvoljeni su {SUPPORTED_BACKBONES}.")
 
         self.size, self.backbone_name, self.dropout = size, backbone, dropout
+        self._backbone_frozen = False
         kwargs = {"pretrained": pretrained, "num_classes": 0}
         if backbone.startswith("swin_"):
             kwargs["img_size"] = size
@@ -72,8 +73,26 @@ class DualViewModel(nn.Module):
         return logits
 
     def freeze_backbone(self, frozen=True):
+        self._backbone_frozen = frozen
         for parameter in self.backbone.parameters():
             parameter.requires_grad = not frozen
+        if frozen:
+            self.backbone.eval()
+
+    def train(self, mode=True):
+        super().train(mode)
+        # Frozen parameters alone are insufficient for CNNs: BatchNorm running
+        # statistics must also remain fixed during the head-only phase.
+        if mode and self._backbone_frozen:
+            self.backbone.eval()
+        elif mode:
+            # Batch size is two paired exams, too small for reliable running
+            # statistics. Keep pretrained BN statistics while still allowing
+            # convolutional and BN affine parameters to be fine-tuned.
+            for module in self.backbone.modules():
+                if isinstance(module, nn.modules.batchnorm._BatchNorm):
+                    module.eval()
+        return self
 
     @property
     def gradcam_target(self):
