@@ -616,6 +616,11 @@ def run_cross_validation(pairs,args,device):
     write_json(root/'patient_leakage_audit.json',{'patient_leakage':False,'outer_patient_fold_unique':True,
                                               'folds':{str(fold):audit for fold,_,_,audit in prepared}})
     all_rows,all_localization,all_metric_rows,fold_summaries=[],[],[],[]
+    primary_strategy=getattr(args,'threshold_strategy','min_sensitivity')
+    requested_strategies=getattr(args,'threshold_comparison_strategies',[])
+    strategies=(list(dict.fromkeys([primary_strategy,*requested_strategies])) if requested_strategies else [])
+    comparison_rows={strategy:[] for strategy in strategies}
+    comparison_folds={strategy:[] for strategy in strategies}
     for fold,outer,development,audit in prepared:
         fold_args=copy.copy(args)
         fold_args.output_dir=root/f'fold_{fold}'
@@ -630,7 +635,31 @@ def run_cross_validation(pairs,args,device):
         model,checkpoint=load_checkpoint(fold_args,device)
         if 'patient_roles' in checkpoint:
             assert_held_out(outer,checkpoint)
-        rows=apply_decisions(predict_frame(model,outer,fold_args,device),checkpoint,fold)
+        raw_outer_rows=predict_frame(model,outer,fold_args,device)
+        if strategies:
+            threshold_rows=predict_frame(model,development[development.split=='threshold'],fold_args,device)
+            threshold_probabilities=apply_calibration(
+                [row['raw_probability'] for row in threshold_rows],checkpoint.get('calibration'),
+                logits=[row['raw_logit'] for row in threshold_rows])
+            selections={primary_strategy:checkpoint['threshold_selection']}
+            for strategy in strategies:
+                if strategy not in selections:
+                    selections[strategy]=select_threshold(
+                        [row['true_label'] for row in threshold_rows],threshold_probabilities,
+                        strategy,args.fixed_threshold,args.minimum_sensitivity,
+                        source='independent_threshold_holdout')
+                strategy_checkpoint={**checkpoint,'threshold':selections[strategy]['threshold'],
+                                     'threshold_selection':selections[strategy]}
+                strategy_rows=apply_decisions(copy.deepcopy(raw_outer_rows),strategy_checkpoint,fold)
+                comparison_rows[strategy].extend(strategy_rows)
+                strategy_metrics=classification_metrics_from_predictions(
+                    [row['true_label'] for row in strategy_rows],[row['prediction'] for row in strategy_rows],
+                    [row['probability'] for row in strategy_rows],getattr(args,'calibration_bins',10))
+                comparison_folds[strategy].append({'fold':fold,'threshold':selections[strategy]['threshold'],
+                                                   **{name:strategy_metrics[name] for name in METRIC_NAMES}})
+            rows=comparison_rows[primary_strategy][-len(raw_outer_rows):]
+        else:
+            rows=apply_decisions(raw_outer_rows,checkpoint,fold)
         labels=[r['true_label'] for r in rows];probabilities=[r['probability'] for r in rows]
         fixed=classification_metrics(labels,probabilities,.5,getattr(args,'calibration_bins',10))
         tuned=classification_metrics_from_predictions(labels,[r['prediction'] for r in rows],probabilities,getattr(args,'calibration_bins',10))
@@ -685,6 +714,24 @@ def run_cross_validation(pairs,args,device):
     pd.DataFrame(all_localization).to_csv(root/'localization_predictions.csv',index=False)
     pd.DataFrame(all_metric_rows).to_csv(root/'localization_metrics.csv',index=False)
     write_json(root/'metrics.json',result)
+    if strategies:
+        comparison={}
+        for strategy in strategies:
+            strategy_frame=pd.DataFrame(comparison_rows[strategy])
+            metrics=classification_metrics_from_predictions(
+                strategy_frame.true_label,strategy_frame.prediction,strategy_frame.probability,
+                getattr(args,'calibration_bins',10))
+            comparison[strategy]={
+                'selection_source':'independent threshold holdout within each outer fold',
+                'classification_inner_tuned_per_fold':metrics,
+                'folds':comparison_folds[strategy],
+                'bootstrap':patient_cluster_bootstrap(
+                    strategy_frame.true_label,strategy_frame.probability,strategy_frame.patient_id,
+                    predictions=strategy_frame.prediction,iterations=getattr(args,'bootstrap_iterations',2000),
+                    seed=args.seed,bins=getattr(args,'calibration_bins',10))}
+            strategy_frame.sort_values(['fold','pair_id']).to_csv(
+                root/f'oof_predictions_{strategy}.csv',index=False)
+        write_json(root/'threshold_comparison.json',comparison)
     print(json.dumps(result,indent=2))
 
 

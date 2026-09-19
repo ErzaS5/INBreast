@@ -23,6 +23,7 @@ DEFAULTS = {
     "test_fraction": .20, "grouped_split": True, "augmentations": True,
     "checkpoint_metric": "pr_auc", "scheduler": "plateau", "checkpoint_every": 5,
     "threshold_strategy": "min_sensitivity", "fixed_threshold": .5, "minimum_sensitivity": .9,
+    "threshold_comparison_strategies": [],
     "calibration_method": "none", "calibration_bins": 10,
     "gradcam_enabled": False, "gradcam_examples": 8, "gradcam_categories": ["FN", "FP", "TP", "TN"],
     "gradcam_dir": None, "heatmap_threshold": .5, "bootstrap_iterations": 2000,
@@ -117,6 +118,9 @@ def validate_config(args) -> None:
         raise ValueError("size mora biti deljiv sa 32 radi uporedivog preprocessinga.")
     if not isinstance(args.gradcam_categories, list) or not set(args.gradcam_categories) <= {"FN", "FP", "TP", "TN"}:
         raise ValueError("gradcam_categories mora biti lista FN/FP/TP/TN.")
+    if (not isinstance(args.threshold_comparison_strategies, list)
+            or not set(args.threshold_comparison_strategies) <= set(CHOICES["threshold_strategy"])):
+        raise ValueError("threshold_comparison_strategies mora biti lista podržanih threshold strategija.")
 
 
 def parse_args(argv=None):
@@ -134,6 +138,8 @@ def parse_args(argv=None):
             options["action"] = argparse.BooleanOptionalAction
         elif name == "gradcam_categories":
             options.update(nargs="+", choices=("FN", "FP", "TP", "TN"))
+        elif name == "threshold_comparison_strategies":
+            options.update(nargs="+", choices=CHOICES["threshold_strategy"])
         else:
             options["type"] = Path if name in PATHS else (type(default) if default is not None else str)
             if name in CHOICES:

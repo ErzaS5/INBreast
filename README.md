@@ -72,7 +72,19 @@ Precedence je **CLI argument > YAML konfiguracija > podrazumevana vrednost**. YA
 
 `metadata_schema_version=2`, `preprocessing_version=2`, arhitektura `shared_encoder_cc_mlo_late_fusion`, verzija 2. Crop je određen intenzitetom, nezavisno od ROI-ja. Float BOX resize čuva veoma sitne ROI-je bez 8-bitnog zaokruživanja. Nije uveden novi VOI/windowing postupak. ImageNet mean/std ostaje isti.
 
-Za Phase 1 poređenje koriste se `experiment_resnet18.yaml` i `experiment_densenet121.yaml`. Oba koriste iste foldove, seed, preprocessing i trening protokol kao početni Swin eksperiment; razlikuje se samo backbone i output direktorijum. Dalji DenseNet-only protokol sa odvojenim encoder/head learning rate-om, zamrznutim BatchNorm statistikama i temperature calibration nalazi se u `experiment_densenet121_calibrated.yaml`; seedovi 43 i 44 pokreću se CLI override-om za `--seed` i `--output-dir`.
+Konfiguracije arhitektonskih eksperimenata grupisane su po modelu da root projekta ostane pregledan:
+
+```text
+experiments/
+  Swin-Tiny/{threshold_comparison.yaml,RESULTS.md}
+  DenseNet-121/{baseline,stable,calibrated}.yaml
+  ResNet-18/{baseline,stable}.yaml
+  PHASE1_RESULTS.md
+```
+
+Phase 1 baseline konfiguracije koriste iste foldove, seed, preprocessing i trening protokol kao početni Swin eksperiment; razlikuju se samo backbone i output direktorijum. DenseNet `stable` i `calibrated` konfiguracije dokumentuju kasnije eksperimente sa odvojenim encoder/head learning rate-om, zamrznutim BatchNorm statistikama i temperature calibration. ResNet-18 i DenseNet-121 više nisu kandidati za dodatno podešavanje, ali ostaju reproduktivno dokumentovani. Seedovi 43 i 44 za kalibrisani DenseNet pokreću se CLI override-om za `--seed` i `--output-dir`.
+
+Swin threshold poređenje bira `youden_j` i `max_f1` pragove na istom nezavisnom threshold holdoutu svakog folda, bez ponovnog treninga za drugu strategiju. Rezultati i preporučena radna tačka nalaze se uz konfiguraciju u `experiments/Swin-Tiny/RESULTS.md`.
 
 ## Priprema i sanity
 

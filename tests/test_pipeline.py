@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import sys
 from types import SimpleNamespace
 import numpy as np
@@ -290,13 +291,19 @@ def test_crossval_orchestrator_writes_complete_oof_results(tmp_path, monkeypatch
         for patient in range(40) for side in ("L", "R")
     ])
     args = SimpleNamespace(output_dir=tmp_path, folds=2, seed=11, inner_val_fraction=.25,
-                           bootstrap_iterations=0)
+                           bootstrap_iterations=0, threshold_strategy="youden_j",
+                           threshold_comparison_strategies=["youden_j", "max_f1"],
+                           fixed_threshold=.5, minimum_sensitivity=.9)
 
     monkeypatch.setattr(train_module, "train_model", lambda _pairs, _args, _device: None)
-    monkeypatch.setattr(train_module, "load_checkpoint", lambda _args, _device: (object(), {"threshold": .5}))
+    monkeypatch.setattr(train_module, "load_checkpoint", lambda _args, _device: (object(), {
+        "threshold": .5, "threshold_selection": {"threshold": .5, "strategy": "youden_j"},
+        "calibration": {"method": "none", "applied": False}}))
     monkeypatch.setattr(train_module, "predict_frame", lambda _model, frame, _args, _device: [
         {"pair_id": row.pair_id, "patient_id": row.patient_id, "side": row.side,
-         "true_label": int(row.label), "probability": .8 if row.label else .2}
+         "true_label": int(row.label), "probability": .8 if row.label else .2,
+         "raw_probability": .8 if row.label else .2,
+         "raw_logit": float(np.log((.8 if row.label else .2) / (.2 if row.label else .8)))}
         for row in frame.itertuples()
     ])
     monkeypatch.setattr(train_module, "collect_localization", lambda *_args, **_kwargs: ([], [], []))
@@ -309,3 +316,7 @@ def test_crossval_orchestrator_writes_complete_oof_results(tmp_path, monkeypatch
     assert oof.groupby("patient_id").fold.nunique().max() == 1
     assert (output / "fold_metrics.csv").is_file()
     assert (output / "metrics.json").is_file()
+    comparison = json.loads((output / "threshold_comparison.json").read_text())
+    assert set(comparison) == {"youden_j", "max_f1"}
+    assert (output / "oof_predictions_youden_j.csv").is_file()
+    assert (output / "oof_predictions_max_f1.csv").is_file()
