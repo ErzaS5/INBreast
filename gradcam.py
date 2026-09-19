@@ -10,17 +10,29 @@ import torch.nn.functional as F
 from PIL import Image
 
 
-def _to_cam(activation, gradient, output_size, layout='NHWC'):
+def _to_cam(activation, gradient, output_size, layout='NHWC', method='gradcam'):
     if activation.ndim != 4 or activation.shape != gradient.shape or activation.shape[0] != 1:
         raise ValueError(f'Grad-CAM zahteva podudarne 4D aktivacije/gradijente sa batch=1: {tuple(activation.shape)}')
     if not torch.isfinite(activation).all() or not torch.isfinite(gradient).all():
         raise ValueError('Grad-CAM aktivacije/gradijenti sadrže NaN/Inf.')
+    if method not in {'gradcam','layercam','hirescam'}:
+        raise ValueError(f'Nepodržan CAM metod: {method}.')
     if layout == 'NHWC':
-        weights = gradient.mean(dim=(1,2),keepdim=True)
-        cam = (activation * weights).sum(dim=-1).relu()
+        if method == 'gradcam':
+            weights = gradient.mean(dim=(1,2),keepdim=True)
+            cam = (activation * weights).sum(dim=-1).relu()
+        elif method == 'layercam':
+            cam = (activation * gradient.relu()).sum(dim=-1).relu()
+        else:
+            cam = (activation * gradient).sum(dim=-1).relu()
     elif layout == 'NCHW':
-        weights = gradient.mean(dim=(2,3),keepdim=True)
-        cam = (activation * weights).sum(dim=1).relu()
+        if method == 'gradcam':
+            weights = gradient.mean(dim=(2,3),keepdim=True)
+            cam = (activation * weights).sum(dim=1).relu()
+        elif method == 'layercam':
+            cam = (activation * gradient.relu()).sum(dim=1).relu()
+        else:
+            cam = (activation * gradient).sum(dim=1).relu()
     else:
         raise ValueError(f'Nepodržan Grad-CAM layout: {layout}; zadati NHWC ili NCHW.')
     cam = F.interpolate(cam[:,None],size=output_size,mode='bilinear',align_corners=False)[0,0].detach().cpu().numpy()
@@ -30,7 +42,21 @@ def _to_cam(activation, gradient, output_size, layout='NHWC'):
     return np.zeros_like(cam) if span <= 1e-8 else (cam-cam.min())/span
 
 
-def paired_gradcam(model, cc_image, mlo_image, target_class=1):
+def normalize_cam_in_valid_region(cam: np.ndarray, valid_region: np.ndarray) -> np.ndarray:
+    """Remove letterbox padding and normalize only over real image content."""
+    cam=np.asarray(cam,np.float32)
+    valid=np.asarray(valid_region,bool)
+    if cam.shape!=valid.shape or not np.isfinite(cam).all() or not valid.any():
+        raise ValueError('CAM i valid region moraju biti podudarni, konačni i neprazni.')
+    result=np.zeros_like(cam)
+    values=cam[valid]
+    span=float(values.max()-values.min())
+    if span>1e-8:
+        result[valid]=(values-values.min())/span
+    return result
+
+
+def paired_gradcam(model, cc_image, mlo_image, target_class=1, method='gradcam'):
     if any(image.ndim != 4 or image.shape[0] != 1 or not torch.isfinite(image).all() for image in (cc_image,mlo_image)):
         raise ValueError('Grad-CAM zahteva konačne 4D CC/MLO ulaze sa batch_size=1.')
     if target_class not in (0,1):
@@ -61,8 +87,8 @@ def paired_gradcam(model, cc_image, mlo_image, target_class=1):
             (logits.sum() if target_class == 1 else -logits.sum()).backward()
         if len(activations) != 2 or any(item.grad is None for item in activations):
             raise RuntimeError(f'Target layer mora biti pozvan tačno dva puta (CC, MLO); uhvaćeno {len(activations)}.')
-        return (_to_cam(activations[0],activations[0].grad,cc_image.shape[-2:],layout),
-                _to_cam(activations[1],activations[1].grad,mlo_image.shape[-2:],layout))
+        return (_to_cam(activations[0],activations[0].grad,cc_image.shape[-2:],layout,method),
+                _to_cam(activations[1],activations[1].grad,mlo_image.shape[-2:],layout,method))
     finally:
         handle.remove()
         model.train(was_training)

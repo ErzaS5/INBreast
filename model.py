@@ -41,15 +41,13 @@ class DualViewModel(nn.Module):
 
         if backbone.startswith("swin_"):
             self.gradcam_layout = "NHWC"
-            self._gradcam_target = self.backbone.layers[-1].blocks[-1].norm1
+            self.gradcam_channels = int(self.backbone.layers[-1].blocks[-1].norm1.normalized_shape[-1])
             self.gradcam_target_name = "backbone.layers[-1].blocks[-1].norm1"
         elif backbone == "resnet18":
             self.gradcam_layout = "NCHW"
-            self._gradcam_target = self.backbone.layer4[-1]
             self.gradcam_target_name = "backbone.layer4[-1]"
         else:
             self.gradcam_layout = "NCHW"
-            self._gradcam_target = self.backbone.features.norm5
             self.gradcam_target_name = "backbone.features.norm5"
 
     def encode(self, image):
@@ -96,7 +94,13 @@ class DualViewModel(nn.Module):
 
     @property
     def gradcam_target(self):
-        return self._gradcam_target
+        # Resolve dynamically so this explanatory hook is not registered as a
+        # duplicate module (and therefore never pollutes model checkpoints).
+        if self.backbone_name.startswith("swin_"):
+            return self.backbone.layers[-1].blocks[-1].norm1
+        if self.backbone_name == "resnet18":
+            return self.backbone.layer4[-1]
+        return self.backbone.features.norm5
 
 
 def create_model(size=384, pretrained=True, dropout=.3,

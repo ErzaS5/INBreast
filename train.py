@@ -23,7 +23,7 @@ from data import (METADATA_SCHEMA_VERSION, PairedINbreastDataset, assign_patient
 from environment import environment_info
 from evaluate import (METRIC_NAMES, apply_calibration, classification_metrics, classification_metrics_from_predictions,
                       dice_iou, fit_temperature, localization_summary, patient_cluster_bootstrap, select_threshold)
-from gradcam import paired_gradcam, save_prediction_artifacts
+from gradcam import normalize_cam_in_valid_region, paired_gradcam, save_prediction_artifacts
 from model import ARCHITECTURE_NAME, ARCHITECTURE_VERSION, NORMALIZATION, SUPPORTED_BACKBONES, create_model
 from preprocessing import (PREPROCESSING_VERSION, geometry_valid_region, heatmap_to_original, load_xml_mask, read_dicom)
 from reporting import prediction_artifacts, write_json
@@ -132,6 +132,12 @@ def trusted_checkpoint_load(path):
     return torch.load(path,map_location='cpu',weights_only=False)
 
 
+def load_model_state(model,state):
+    """Load current checkpoints and legacy ones containing a Grad-CAM alias."""
+    cleaned={key:value for key,value in state.items() if not key.startswith('_gradcam_target.')}
+    model.load_state_dict(cleaned)
+
+
 def validate_checkpoint_versions(checkpoint):
     if checkpoint.get('preprocessing_version')!=PREPROCESSING_VERSION:
         raise ValueError('Checkpoint koristi staru ili nepoznatu verziju preprocessinga; trenirajte od početka.')
@@ -160,7 +166,7 @@ def load_checkpoint(args,device):
     checkpoint=trusted_checkpoint_load(args.checkpoint or args.output_dir/'best.pt')
     validate_checkpoint_versions(checkpoint)
     model=create_model(checkpoint['size'],False,checkpoint['dropout'],checkpoint['backbone']).to(device)
-    model.load_state_dict(checkpoint['model']);model.eval()
+    load_model_state(model,checkpoint['model']);model.eval()
     args.size=checkpoint['size']
     return model,checkpoint
 
@@ -200,7 +206,7 @@ def make_optimizer(model,args):
 
 def finalize_checkpoint(path,pairs,args,device,model):
     checkpoint=trusted_checkpoint_load(path)
-    model.load_state_dict(checkpoint['model']);model.eval()
+    load_model_state(model,checkpoint['model']);model.eval()
     calibration={'method':'none','applied':False,'probability_kind':'raw','source':None}
     if args.calibration_method=='temperature':
         calibration_frame=pairs[pairs.split=='calibration']
@@ -260,7 +266,7 @@ def train_model(pairs,args,device):
                      'lr','encoder_lr','head_lr','weight_decay','augmentations','patience','threshold_strategy','fixed_threshold','minimum_sensitivity','calibration_method'):
             if saved['config'].get(name)!=getattr(args,name):
                 raise ValueError(f'Resume konfiguracija nije kompatibilna: {name}.')
-        model.load_state_dict(saved['model']);optimizer.load_state_dict(saved['optimizer'])
+        load_model_state(model,saved['model']);optimizer.load_state_dict(saved['optimizer'])
         if scheduler:
             scheduler.load_state_dict(saved['scheduler'])
         scaler.load_state_dict(saved['scaler'])
@@ -400,9 +406,16 @@ def collect_localization(model,frame,args,device,save=False,heatmap_threshold=.5
         if truth is None or category in getattr(args,'gradcam_categories',['FN','FP','TP','TN']):
             candidates.append((row['pair_id'],category,p))
     categories={pair_id:(category,p) for pair_id,category,p in candidates}
-    priority = {'FN': 0, 'FP': 1, 'TP': 2, 'TN': 3, 'unlabelled': 4}
-    ranked = sorted(candidates, key=lambda item: (priority[item[1]], -abs(item[2] - .5), item[0]))
-    chosen=[item[0] for item in ranked[:getattr(args,'gradcam_examples',8)]]
+    requested=getattr(args,'gradcam_categories',['FN','FP','TP','TN'])
+    buckets={category:sorted((item for item in candidates if item[1]==category),
+                             key=lambda item:(-abs(item[2]-.5),item[0])) for category in requested}
+    chosen=[]
+    # Round-robin prevents one error category from silently filling the entire
+    # visualization budget and makes TP/FN comparisons interpretable.
+    while len(chosen)<getattr(args,'gradcam_examples',8) and any(buckets.values()):
+        for category in requested:
+            if buckets[category] and len(chosen)<getattr(args,'gradcam_examples',8):
+                chosen.append(buckets[category].pop(0)[0])
     if not chosen:
         return [],[],[]
     selected=frame[frame.pair_id.isin(chosen)].sort_values('pair_id')
@@ -410,7 +423,8 @@ def collect_localization(model,frame,args,device,save=False,heatmap_threshold=.5
     heatmaps,masks,records=[],[],[]
     for batch in loader:
         cc,mlo=batch['cc_image'].to(device),batch['mlo_image'].to(device)
-        cc_cam,mlo_cam=paired_gradcam(model,cc,mlo,target_class=1)
+        cam_method=getattr(args,'gradcam_method','gradcam')
+        cc_cam,mlo_cam=paired_gradcam(model,cc,mlo,target_class=1,method=cam_method)
         truth=float(batch['label'][0]);true_label=int(truth) if np.isfinite(truth) else None
         pair_id=batch['pair_id'][0]
         category,probability=categories[pair_id]
@@ -421,7 +435,7 @@ def collect_localization(model,frame,args,device,save=False,heatmap_threshold=.5
             model_heatmap=cam.copy()
             total_heat=float(model_heatmap.sum())
             padding_heat_fraction=float(model_heatmap[~valid].sum()/total_heat) if total_heat>0 else 0.
-            cam=np.where(valid,cam,0.)
+            cam=normalize_cam_in_valid_region(cam,valid)
             original_cam=heatmap_to_original(cam,geometry)
             xml=batch[f'{prefix}_xml_path'][0]
             original_shape=(geometry['original_height'],geometry['original_width'])
@@ -434,7 +448,7 @@ def collect_localization(model,frame,args,device,save=False,heatmap_threshold=.5
                     'predicted_label':int(probability>=classification_threshold),'category':category,
                     'classification_threshold':classification_threshold,'has_roi':has_roi,
                     'cam':original_cam,'mask':roi,'valid_region':original_valid,'geometry':geometry,
-                    'target_class':1,'target_layer':model.gradcam_target_name,
+                    'target_class':1,'target_layer':model.gradcam_target_name,'cam_method':cam_method,
                     'evaluation_space':'original DICOM resolution; square padding excluded'}
             record['padding_heat_fraction']=padding_heat_fraction
             if has_roi and roi.any():

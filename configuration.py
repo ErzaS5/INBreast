@@ -26,7 +26,7 @@ DEFAULTS = {
     "threshold_comparison_strategies": [],
     "calibration_method": "none", "calibration_bins": 10,
     "gradcam_enabled": False, "gradcam_examples": 8, "gradcam_categories": ["FN", "FP", "TP", "TN"],
-    "gradcam_dir": None, "heatmap_threshold": .5, "bootstrap_iterations": 2000,
+    "gradcam_dir": None, "gradcam_method": "gradcam", "heatmap_threshold": .5, "bootstrap_iterations": 2000,
     "eval_split": "test", "device": "auto", "cache_dir": None,
 }
 NESTED = {
@@ -44,6 +44,7 @@ CHOICES = {
     "scheduler": ("plateau", "cosine", "none"),
     "eval_split": ("test", "val", "threshold", "calibration"),
     "device": ("auto", "cpu", "cuda", "mps"),
+    "gradcam_method": ("gradcam", "layercam", "hirescam"),
 }
 
 

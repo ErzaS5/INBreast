@@ -19,7 +19,7 @@ from data import (assign_patient_folds, build_metadata, grouped_development_spli
                   patient_train_val_split, select_pairing_views, split_audit, validate_metadata_pairs)
 from evaluate import (apply_calibration, calibration_metrics, classification_metrics, classification_metrics_from_predictions,
                       fit_temperature, patient_cluster_bootstrap, select_threshold)
-from gradcam import _to_cam, paired_gradcam
+from gradcam import _to_cam, normalize_cam_in_valid_region, paired_gradcam
 from model import ARCHITECTURE_NAME, ARCHITECTURE_VERSION, NORMALIZATION, create_model
 from preprocessing import (geometry_valid_region, heatmap_to_original, load_xml_mask, normalize_dicom_pixels, prepare)
 
@@ -379,6 +379,15 @@ def test_gradcam_layout_finiteness_constant_and_shapes():
         _to_cam(activation,gradient,(16,16),'unknown')
     with pytest.raises(ValueError,match='NaN/Inf'):
         _to_cam(activation,gradient*float('nan'),(16,16))
+
+
+def test_gradcam_is_renormalized_after_padding_is_excluded():
+    cam=np.array([[1.,.8,0.],[.4,.2,0.]],np.float32)
+    valid=np.array([[False,True,False],[True,True,False]])
+    normalized=normalize_cam_in_valid_region(cam,valid)
+    assert normalized[~valid].sum()==0
+    assert normalized[valid].min()==0
+    assert normalized[valid].max()==1
 
 
 @pytest.mark.parametrize('invalid',['shape','batch','finite','size'])
