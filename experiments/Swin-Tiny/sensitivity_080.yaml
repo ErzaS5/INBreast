@@ -1,0 +1,44 @@
+# Screening-oriented operating point. The threshold is selected independently
+# within each outer fold; the outer test fold is used only for final evaluation.
+data_root: C:/Users/Neda/Downloads/INBREAST-AMS/INbreast Release 1.0
+metadata_pairs: experiments/artifacts/metadata_pairs.csv
+mode: crossval
+output_dir: experiments/artifacts/phase3_swin_sensitivity_080
+seed: 42
+grouped_split: true
+folds: 5
+inner_val_fraction: 0.15
+threshold_fraction: 0.15
+calibration_fraction: 0.10
+test_fraction: 0.20
+backbone: swin_tiny_patch4_window7_224
+size: 384
+dropout: 0.3
+batch_size: 2
+epochs: 25
+workers: 0
+lr: 0.00002
+weight_decay: 0.0001
+augmentations: true
+freeze_epochs: 2
+checkpoint_metric: pr_auc
+patience: 5
+scheduler: plateau
+checkpoint_every: 0
+
+# Among thresholds reaching sensitivity >= 0.80 on the independent threshold
+# holdout, select the one with the highest specificity (then highest threshold).
+threshold_strategy: min_sensitivity
+minimum_sensitivity: 0.80
+threshold_comparison_strategies: [youden_j, max_f1]
+fixed_threshold: 0.5
+
+calibration_method: none
+calibration_bins: 10
+gradcam_enabled: false
+gradcam_examples: 0
+gradcam_method: gradcam
+bootstrap_iterations: 2000
+eval_split: test
+device: auto
+cache_dir: experiments/artifacts/preprocessed

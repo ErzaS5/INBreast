@@ -149,6 +149,28 @@ Pretraga koristi jedinstvene verovatnoće, susedne floating-point pragove i kraj
 
 Temperature scaling koristi originalne model logits (ne gubi ih zbog saturacije sigmoid verovatnoća) i fituje se samo na nezavisnom calibration holdoutu. Primena zahteva niži Brier i NLL na tom skupu; inače probability ostaje raw. To je dijagnostika fitovanja, a nepristrasna procena pre/posle nalazi se samo na test/outer rezultatima. Ni kalibrator ni prag se ne prepravljaju posle posmatranja test rezultata. Podrazumevani baseline ne primenjuje kalibraciju; ipak beleži Brier, ECE i reliability diagram.
 
+## Screening prag: cilj senzitivnosti 0.80
+
+Kao dodatni medicinski orijentisan test evaluirana je radna tačka koja daje prioritet pronalaženju što većeg broja stvarno pozitivnih slučajeva. Korišćeni su isti trenirani Swin-Tiny modeli i isti patient-grouped outer foldovi kao u prethodnom poređenju; modeli nisu ponovo trenirani i njihov ranking rezultat se nije menjao. U svakom foldu prag je ponovo izabran isključivo na originalnom, patient-disjoint threshold holdoutu strategijom `min_sensitivity`, sa unapred zadatim ciljem `minimum_sensitivity: 0.80`. Izabrani prag je zatim primenjen na netaknuti outer-test fold. Test labele nisu korišćene za izbor praga.
+
+| Strategija | Senzitivnost | Specifičnost | Balanced accuracy | Precision | NPV | F1 | MCC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `min_sensitivity=0.80` | **0.8400** | 0.4605 | 0.6503 | 0.3387 | **0.8974** | 0.4828 | 0.2664 |
+| `youden_j` | 0.6600 | **0.8092** | **0.7346** | **0.5323** | 0.8786 | **0.5893** | **0.4391** |
+| `max_f1` | 0.5800 | 0.8553 | 0.7176 | 0.5686 | 0.8609 | 0.5743 | 0.4324 |
+
+Na radnoj tački `min_sensitivity=0.80` confusion matrix je `TN=70`, `FP=82`, `FN=8`, `TP=42`. U odnosu na `youden_j`, broj pronađenih pozitivnih slučajeva porastao je sa 33 na 42, a broj propuštenih pozitivnih slučajeva smanjen je sa 17 na 8. Cena tog poboljšanja je rast false-positive nalaza sa 29 na 82 i pad specifičnosti sa 0.8092 na 0.4605. Zbog toga balanced accuracy nije ostao isti, već je pao sa 0.7346 na 0.6503. Patient-cluster bootstrap 95% interval za senzitivnost iznosi 0.7308–0.9348, za specifičnost 0.3642–0.5522, a za balanced accuracy 0.5824–0.7121.
+
+Ova radna tačka je zadržana kao screening-orijentisana varijanta za poređenje na prezentaciji: u medicinskom scenariju propušten pozitivan slučaj može imati veću cenu od dodatnog false-positive nalaza. Rezultat ipak nije dokaz kliničke primenljivosti. Cilj 0.80 odnosi se na unutrašnji threshold holdout i ne garantuje najmanje 0.80 u svakom novom skupu ili svakom pojedinačnom outer foldu; potrebna je potvrda na većem nezavisnom skupu.
+
+Reproduktivna konfiguracija je `experiments/Swin-Tiny/sensitivity_080.yaml`. Kada su postojeći fold checkpointi dostupni, pragovi i rezultati se reprodukuju bez ponovnog treninga:
+
+```bash
+python retune_crossval_thresholds.py --config experiments/Swin-Tiny/sensitivity_080.yaml --source experiments/artifacts/phase2_swin_thresholds/crossval
+```
+
+Rezultati se čuvaju u `experiments/artifacts/phase3_swin_sensitivity_080/crossval/threshold_comparison.json`, zajedno sa OOF predikcijama za svaku strategiju i threshold zapisom svakog folda.
+
 ## Evaluate i predict
 
 ```bash
